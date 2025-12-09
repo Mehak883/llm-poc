@@ -7,10 +7,10 @@ load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+def calculate_words_spoken(transcript):
+    return sum(len(t.get("message", "").split()) for t in transcript if t.get("message"))
 
 def analyze_call_structured(conversation_id, transcript):
-
-    
     # Only user messages for intent detection
     user_messages = [
         t.get("message", "") for t in transcript if t.get("role") == "user"
@@ -53,6 +53,29 @@ def analyze_call_structured(conversation_id, transcript):
     - "what_you_did_well" : minimum 4 bullet points
     - "areas_of_improvement" : minimum 4 bullet points
     - "intent" : short phrase (e.g. "loan enquiry", "complaint", "account issue")
+
+    In addition, identify 3 fixed key moments and rate each:
+
+    Key Moments:
+    1. Opening Response
+    2. Problem Investigation
+    3. Resolution Offer
+
+    For each moment:
+    - "moment_title" → one of the above
+    - "level" → one of ["Excellent", "Very Good", "Good", "Moderate", "Needs Improvement"]
+    - "moment_feedback" → short descriptive reason or example quote
+
+    Example Output:
+    [
+      {{"moment_title": "Opening Response", "level": "Excellent", "moment_feedback": "Perfect empathy opening."}},
+      {{"moment_title": "Problem Investigation", "level": "Good", "moment_feedback": "Identified issue quickly but lacked depth."}},
+      {{"moment_title": "Resolution Offer", "level": "Excellent", "moment_feedback": "Clear resolution and follow-up commitment."}}
+    ]
+
+    Also identify the exact customer or agent sentence that best represents the "Opening Response" moment. Return it as "opening_response_sentence".
+    Return the final output strictly adhering to the following JSON schema:
+
     """
 
     schema = {
@@ -104,12 +127,39 @@ def analyze_call_structured(conversation_id, transcript):
                     ]
                 },
 
+                "key_moments": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "moment_title": {
+                                "type": "string",
+                                "enum": ["Opening Response", "Problem Investigation", "Resolution Offer"]
+                            },
+                            "level": {
+                                "type": "string",
+                                "enum": ["Excellent", "Very Good", "Good", "Moderate", "Needs Improvement"]
+                            },
+                            "moment_feedback": {"type": "string"}
+                        },
+                        "required": ["moment_title", "level", "moment_feedback"]
+                    },
+                    "additionalProperties": False,
+                    "minItems": 3,
+                    "maxItems": 3
+                },
+                "opening_response_sentence": {"type": "string"}
+
+
             },
             "required": [
                 "conversation_id",
                 "intent",
                 "feedback",
                 "performance_scores",
+                "key_moments",
+                "opening_response_sentence"
             ]
         },
         "strict": True
@@ -137,6 +187,7 @@ def analyze_call_structured(conversation_id, transcript):
         return {"error": "Model returned no content"}
 
     result = json.loads(content)
+    result["words_spoken"] = calculate_words_spoken(transcript)
 
     result["conversation_id"] = conversation_id
     return result
