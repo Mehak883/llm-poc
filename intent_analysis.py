@@ -10,6 +10,76 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def calculate_words_spoken(transcript):
     return sum(len(t.get("message", "").split()) for t in transcript if t.get("message"))
 
+def analyze_customer_satisfaction(transcript):
+    """
+    Analyze customer satisfaction using an LLM on the last messages.
+    Returns only the satisfaction score (0-10).
+    """
+
+    if not transcript:
+        return 0.0
+
+    # Take last 10 messages or fewer
+    last_messages = transcript[-10:]
+
+    # Combine into readable dialogue text
+    formatted_conversation = "\n".join([
+        f"{t.get('role', '').capitalize()}: {t.get('message', '')}"
+        for t in last_messages if t.get("message")
+    ])
+
+    if not formatted_conversation.strip():
+        return 0.0
+
+    # LLM prompt
+    prompt = f"""
+    You are a customer satisfaction evaluator.
+    Read the following last messages between a customer with role agent and a sales agent with role user.
+
+    Conversation:
+    {formatted_conversation}
+
+    Based on the customer's tone, mood, and the final resolution,
+    rate their satisfaction on a scale from 0 to 10.
+
+    0 = Extremely Dissatisfied
+    5 = Neutral
+    10 = Extremely Satisfied
+
+    Respond with ONLY the numeric score (no explanation, no text).
+    """
+
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Return only the numeric score (0-10)."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+
+        content = (res.choices[0].message.content or "").strip()
+
+
+        # Try to extract a float from response
+        try:
+            score = float(content)
+            return max(0.0, min(10.0, round(score, 1)))
+        except ValueError:
+            # If model adds extra text accidentally
+            import re
+            match = re.search(r"(\d+(\.\d+)?)", content)
+            if match:
+                score = float(match.group(1))
+                return max(0.0, min(10.0, round(score, 1)))
+            else:
+                return 0.0
+
+    except Exception as e:
+        print(f"Error in satisfaction analysis: {e}")
+        return 0.0
+
 def analyze_call_structured(conversation_id, transcript):
     # Only user messages for intent detection
     user_messages = [
@@ -188,6 +258,6 @@ def analyze_call_structured(conversation_id, transcript):
 
     result = json.loads(content)
     result["words_spoken"] = calculate_words_spoken(transcript)
-
     result["conversation_id"] = conversation_id
+    result["customer_satisfaction_score"] = analyze_customer_satisfaction(transcript)
     return result
