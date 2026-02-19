@@ -1,14 +1,20 @@
 import json
 import os
+import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+logger.info("OpenAI client initialized")
 
 def calculate_words_spoken(transcript):
-    return sum(len(t.get("message", "").split()) for t in transcript if t.get("message"))
+    word_count = sum(len(t.get("message", "").split()) for t in transcript if t.get("message"))
+    logger.debug(f"Calculated total words spoken: {word_count}")
+    return word_count
 
 def analyze_customer_satisfaction(transcript):
     """
@@ -17,6 +23,7 @@ def analyze_customer_satisfaction(transcript):
     """
 
     if not transcript:
+        logger.warning("Transcription is empty. Returning customer satisfaction score of 0.0.")
         return 0.0
 
     # Take last 10 messages or fewer
@@ -29,6 +36,7 @@ def analyze_customer_satisfaction(transcript):
     ])
 
     if not formatted_conversation.strip():
+        logger.warning("No valid messages found in the last 10 entries. Returning customer satisfaction score of 0.0.")
         return 0.0
 
     # LLM prompt
@@ -52,32 +60,45 @@ def analyze_customer_satisfaction(transcript):
     try:
         res = client.chat.completions.create(
             model="gpt-4o-mini",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "customer_satisfaction_schema",
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "score": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 10
+                            }
+                        },
+                        "required": ["score"]
+                    },
+                    "strict": True
+                }
+            },
             messages=[
-                {"role": "system", "content": "Return only the numeric score (0-10)."},
+                {"role": "system", "content": "Return only valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0
         )
 
-        content = (res.choices[0].message.content or "").strip()
+        content = res.choices[0].message.content
+        if not content:
+            logger.error("Model returned no content")
+            return None
+        result = json.loads(content)
 
+        score = round(float(result["score"]), 1)
+        logger.info(f"Customer satisfaction score: {score}")
 
-        # Try to extract a float from response
-        try:
-            score = float(content)
-            return max(0.0, min(10.0, round(score, 1)))
-        except ValueError:
-            # If model adds extra text accidentally
-            import re
-            match = re.search(r"(\d+(\.\d+)?)", content)
-            if match:
-                score = float(match.group(1))
-                return max(0.0, min(10.0, round(score, 1)))
-            else:
-                return 0.0
-
+        return score
+    
     except Exception as e:
-        print(f"Error in satisfaction analysis: {e}")
+        logger.exception(f"Error in satisfaction analysis: {e}")
         return 0.0
 
 def analyze_call_structured(conversation_id, transcript):
@@ -235,29 +256,38 @@ def analyze_call_structured(conversation_id, transcript):
         "strict": True
     }
 
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "sales_schema",
-                "schema": schema["schema"],      
-                "strict": True
-            }
-        },
-        messages=[
-            {"role": "system", "content": "Return ONLY valid JSON. No extra text."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "sales_schema",
+                    "schema": schema["schema"],      
+                    "strict": True
+                }
+            },
+            messages=[
+                {"role": "system", "content": "Return ONLY valid JSON. No extra text."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    content = res.choices[0].message.content
+        content = res.choices[0].message.content
 
-    if content is None:
-        return {"error": "Model returned no content"}
+        if content is None:
+            logger.error(f"Model returned no content for conversation_id: {conversation_id}")
+            return {"error": "Model returned no content"}
 
-    result = json.loads(content)
-    result["words_spoken"] = calculate_words_spoken(transcript)
-    result["conversation_id"] = conversation_id
-    result["customer_satisfaction_score"] = analyze_customer_satisfaction(transcript)
-    return result
+        result = json.loads(content)
+        result["words_spoken"] = calculate_words_spoken(transcript)
+        result["conversation_id"] = conversation_id
+        result["customer_satisfaction_score"] = analyze_customer_satisfaction(transcript)
+        return result
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error while analyzing feedback for conversation_id {conversation_id}: {e}", exc_info=True)
+        return {"error": f"JSON parsing error: {e}"}
+    except Exception as e:
+        logger.exception(f"Error in structured call analysis for conversation_id {conversation_id}: {e}")
+        return {"error": str(e)}
+
