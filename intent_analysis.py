@@ -1,14 +1,13 @@
 import json
-import os
 import logging
-from openai import OpenAI
+from Services.openai_client import OpenAIClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAIClient.get_client()
 logger.info("OpenAI client initialized")
 
 def calculate_words_spoken(transcript):

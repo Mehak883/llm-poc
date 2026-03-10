@@ -1,7 +1,9 @@
 import logging
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from intent_analysis import analyze_call_structured
+from Services.assist_service import AssistService   
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -10,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 logger.info("Server for feedback analysis initialized")
+assist_service = AssistService()
 
 # Allow .NET backend
 app.add_middleware(
@@ -44,7 +47,49 @@ async def analyze(request: Request):
         return analysis
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON payload: {e}")
-        return {"error": "Invalid JSON payload"}
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload for analyze api."})
     except Exception as e:
         logger.exception(f"Error processing analysis request: {e}")
-        return {"error": str(e)}
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/assist")
+async def assist(request: Request):
+
+    try:
+
+        payload = await request.json()
+
+        conversation_id = payload.get("conversationId")
+        user_message = payload.get("userMessage", "")
+        checklist = payload.get("complianceChecklist", [])
+        transcript = [{"role": "user", "message": user_message}]
+
+        return assist_service.analyze(
+            conversation_id,
+            transcript,
+            checklist
+        )
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON payload: {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload for the assist api."})
+    except Exception as e:
+        logger.exception(f"Error processing assist request: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/session/end")
+async def session_end(request: Request):
+
+    try:
+        payload = await request.json()
+        conv_id = payload.get("conversationId")
+        if not conv_id:
+            return {"error": "conv_id missing"}
+        assist_service.end_session(conv_id)
+        return {"status": "ok"}
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON payload: {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON payload of the session end api."})
+    except Exception as e:
+        logger.exception(f"Error in ending the request: {e}")
+        return JSONResponse(status_code=500, content={"error":str(e)})
