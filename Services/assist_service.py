@@ -1,6 +1,7 @@
 import logging
 from Services.openai_client import OpenAIClient
 from Services.session_manager import SessionManager
+from Prompts.prompts import ASSIST_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -66,18 +67,7 @@ class AssistService:
                 }
             formatted_conversation = self.format_transcript(transcript)
             checklist_prompt = self.checklist_to_prompt(items_to_check)
-            prompt = f"""
-                        You are a real-time sales coach.
-                        Conversation:
-                        {formatted_conversation}
-                        Checklist items the sales agent must still cover:
-                        {checklist_prompt}
-                        Return ALL listed checklist items using this format:
-
-                        1 done
-                        2 pending
-                        3 active
-                        """
+            prompt = ASSIST_PROMPT.format(formatted_conversation=formatted_conversation, checklist_prompt=checklist_prompt)
 
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",

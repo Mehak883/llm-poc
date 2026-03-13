@@ -4,6 +4,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from intent_analysis import analyze_call_structured
 from Services.assist_service import AssistService   
+from Services.checklist_service import ChecklistService
+from fastapi import UploadFile, File, Form
+
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +16,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 logger.info("Server for feedback analysis initialized")
 assist_service = AssistService()
+checklist_service = ChecklistService()
 
 # Allow .NET backend
 app.add_middleware(
@@ -93,3 +97,21 @@ async def session_end(request: Request):
     except Exception as e:
         logger.exception(f"Error in ending the request: {e}")
         return JSONResponse(status_code=500, content={"error":str(e)})
+    
+@app.post("/api/checklist/generate")
+async def generate_checklist(
+    file: UploadFile = File(...)
+):
+    try:
+
+        pdf_bytes = await file.read()
+        checklist = checklist_service.generate_checklist(pdf_bytes)
+        return {
+            "checklist": checklist
+        }
+    except Exception as e:
+        logger.exception("Checklist generation failed")
+
+        return {
+            "error": str(e)
+        }
