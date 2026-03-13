@@ -1,13 +1,29 @@
 import json
 import logging
-from Services.openai_client import OpenAIClient
+from openai import AzureOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-client = OpenAIClient.get_client()
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+api_version = os.getenv("AZURE_OPENAI_API_VERSION")
+model= os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+
+if not api_key or not endpoint or not api_version:
+    raise ValueError("Missing Azure OpenAI environment variables")
+
+if not model:
+    raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME is missing in environment variables.")
+
+client = AzureOpenAI(
+    api_key=api_key,
+    azure_endpoint=endpoint,
+    api_version=api_version
+)
+
 logger.info("OpenAI client initialized")
 
 def calculate_words_spoken(transcript):
@@ -58,7 +74,7 @@ def analyze_customer_satisfaction(transcript):
 
     try:
         res = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model or "gpt-4o-mini",
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -257,7 +273,7 @@ def analyze_call_structured(conversation_id, transcript):
 
     try:
         res = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model or "gpt-4o-mini",
             response_format={
                 "type": "json_schema",
                 "json_schema": {
