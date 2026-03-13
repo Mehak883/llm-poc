@@ -1,5 +1,6 @@
 import logging
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from intent_analysis import analyze_call_structured
 import json
@@ -38,13 +39,19 @@ async def analyze(request: Request):
         analysis = analyze_call_structured(conversation_id, transcript)
         if "error" in analysis:
             logger.error(f"Analysis failed for conversation_id: {conversation_id}")
-        else:
-            logger.info(f"Analysis completed successfully for conversation_id: {conversation_id}")
+            return JSONResponse(status_code=500, content={"error": analysis["error"]})
+        logger.info(f"Analysis completed successfully for conversation_id: {conversation_id}")
         # send analysis back to .NET
         return analysis
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON payload: {e}")
-        return {"error": "Invalid JSON payload"}
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid JSON payload"}
+        )
     except Exception as e:
         logger.exception(f"Error processing analysis request: {e}")
-        return {"error": str(e)}
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
