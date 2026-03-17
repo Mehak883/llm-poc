@@ -1,8 +1,13 @@
 import logging
-from fastapi import FastAPI, Request
+from datetime import datetime, timezone
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from intent_analysis import analyze_call_structured
+from fastapi import UploadFile, File
+from intent_analysis import IntentAnalysis
+from Services.checklist_service import ChecklistService
+from Models.base_response import APIResponse
+from Models.analyze_model import AnalyzeRequest
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -11,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 logger.info("Server for feedback analysis initialized")
+checklist_service = ChecklistService()
+intent_analysis_service = IntentAnalysis()
 
 # Allow .NET backend
 app.add_middleware(
@@ -22,21 +29,21 @@ app.add_middleware(
 )
 
 @app.post("/api/analyze")
-async def analyze(request: Request):
+async def analyze(request: AnalyzeRequest):
 
     try:
-        payload = await request.json()
-        logger.debug(f"Incoming payload: {json.dumps(payload, indent=2)}")
-        conversation_id = payload.get("conversation_id")
-        agent_id = payload.get("agent_id")
-        transcript = payload.get("transcript", [])
-
+        conversation_id = request.conversation_id
+        agent_id = request.agent_id
+        transcript = request.transcript
         if not conversation_id:
             logger.warning("Missing conversation_id in request payload")
-            return {"error": "conversation_id missing"}
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Missing conversation_id in analyze request payload"}
+            )
 
         # transcript is already user-only (from .NET)
-        analysis = analyze_call_structured(conversation_id, transcript)
+        analysis = intent_analysis_service.analyze_call_structured(conversation_id, transcript)
         if "error" in analysis:
             logger.error(f"Analysis failed for conversation_id: {conversation_id}")
             return JSONResponse(status_code=500, content={"error": analysis["error"]})
@@ -54,4 +61,29 @@ async def analyze(request: Request):
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}
+        )
+      
+@app.post("/api/checklist/generate")
+async def generate_checklist(
+    file: UploadFile = File(...)
+):
+    try:
+        pdf_bytes = await file.read()
+        checklist = checklist_service.generate_checklist(pdf_bytes)
+        checklist_labels = [item["label"] for item in checklist]
+        return APIResponse(
+            status="success",
+            timestamp=datetime.now(timezone.utc),
+            data={"checklist": checklist_labels}
+        ).model_dump(exclude_none=True)
+    
+    except Exception as e:
+        logger.exception("Checklist generation failed")
+        return JSONResponse(
+            status_code=500,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump(mode="json")
         )
