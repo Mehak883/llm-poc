@@ -2,3 +2,7 @@ fastapi
 uvicorn
 openai
 python-dotenv
+pypdf
+pydantic
+pydantic-settings
+python-multipart
