@@ -27,7 +27,7 @@ INTENT_PROMPT="""You are an expert and strict evaluator analyzing a phone call b
     Provide structured JSON ONLY (strict mode) following the schema.
 
     TRANSCRIPT:
-    {json.dumps(user_messages, indent=2)}
+    {user_messages}
 
     Title must ALWAYS be:
     "Sales Agent Performance Review"
@@ -84,5 +84,4 @@ ASSIST_PROMPT="""You are a real-time sales coach.
                         Return ALL listed checklist items using this format:
 
                         1 done
-                        2 pending
-                        3 active"""
+                        2 pending"""

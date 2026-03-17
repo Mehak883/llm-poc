@@ -1,16 +1,26 @@
 import logging
-from Services.openai_client import OpenAIClient
+from typing import Literal
+from pydantic import BaseModel
+from Services.openai_client import AzureOpenAIClient
 from Services.session_manager import SessionManager
 from Prompts.prompts import ASSIST_PROMPT
 
 logger = logging.getLogger(__name__)
+
+# Pydantic models for strict output
+class AssistItem(BaseModel):
+    id: int
+    status: Literal["pending", "done"]
+
+class AssistResponse(BaseModel):
+    checklist: list[AssistItem]
 
 
 class AssistService:
 
     def __init__(self):
 
-        self.client = OpenAIClient.get_client()
+        self.client = AzureOpenAIClient.get_client()
         self.session_manager = SessionManager()
 
     def format_transcript(self, transcript):
@@ -18,8 +28,8 @@ class AssistService:
         recent = transcript[-12:]
         lines = []
         for t in recent:
-            role = t.get("role", "")
-            msg = t.get("message", "")
+            role = t.role
+            msg = t.message
             lines.append(f"{role}: {msg}")
 
         return "\n".join(lines)
@@ -31,22 +41,22 @@ class AssistService:
             lines.append(f"{item['id']} {item['label']}")
         return "\n".join(lines)
 
-    def parse_output(self, text):
+    # def parse_output(self, text):
 
-        checklist = []
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            if line[0].isdigit():
-                parts = line.split()
-                if len(parts) >= 2:
-                    item_id = int(parts[0].replace(":", ""))
-                    checklist.append({
-                        "id": item_id,
-                        "status": parts[1]
-                    })
-        return checklist
+    #     checklist = []
+    #     for line in text.split("\n"):
+    #         line = line.strip()
+    #         if not line:
+    #             continue
+    #         if line[0].isdigit():
+    #             parts = line.split()
+    #             if len(parts) >= 2:
+    #                 item_id = int(parts[0].replace(":", ""))
+    #                 checklist.append({
+    #                     "id": item_id,
+    #                     "status": parts[1]
+    #                 })
+    #     return checklist
 
     def analyze(self, conv_id, transcript, checklist=None):
 
@@ -69,19 +79,31 @@ class AssistService:
             checklist_prompt = self.checklist_to_prompt(items_to_check)
             prompt = ASSIST_PROMPT.format(formatted_conversation=formatted_conversation, checklist_prompt=checklist_prompt)
 
-            response = self.client.chat.completions.create(
+            response = self.client.chat.completions.parse(
                 model="gpt-4o-mini",
+                response_format=AssistResponse,
                 messages=[
                     {"role": "system", "content": "Return only formatted checklist."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=120
+                max_tokens=200
             )
 
-            output = response.choices[0].message.content or ""
-            parsed = self.parse_output(output)
-            self.session_manager.update_state(conv_id, parsed)
+            output = response.choices[0].message
+
+            if output.refusal:                                  # handle refusal
+                logger.warning(f"LLM refused: {output.refusal}")
+                return {"error": "LLM refused to respond"}
+
+            if output.parsed is None:
+                logger.error(f"Parsing failed. Raw content: {output.content}")
+                return []
+            parsed = output.parsed
+            self.session_manager.update_state(
+                conv_id,
+                [item.model_dump() for item in parsed.checklist]
+            )
             return {
                 "checklist": self.session_manager.build_response(conv_id)
             }

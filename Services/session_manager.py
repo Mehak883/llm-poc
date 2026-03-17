@@ -61,7 +61,7 @@ class SessionManager:
         logger.debug(f"Fetching pending checklist items for {conv_id}")
         return [
             item for item in session["checklist"]
-            if session["state"][item["id"]] in ("pending", "active")
+            if session["state"][item["id"]] == "pending"
         ]
 
     def build_response(self, conv_id):
@@ -69,8 +69,9 @@ class SessionManager:
         session = self.sessions[conv_id]
         logger.debug(f"Fetching session for conversation: {conv_id}")
         return [
-            {"id": item["id"], "status": session["state"][item["id"]]}
+            {"id": item["id"], "status": "done"}
             for item in session["checklist"]
+            if session["state"][item["id"]] == "done"
         ]
 
     def end_session(self, conv_id):
