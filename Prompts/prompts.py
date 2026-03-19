@@ -79,7 +79,7 @@ CUSTOMER_SATISFACTION_PROMPT=""" You are a customer satisfaction evaluator.
 ASSIST_PROMPT="""You are a real-time sales coach.
                         Conversation:
                         {formatted_conversation}
-                        Checklist items the sales agent must still cover:
+                        Checklist items the sales agent must cover:
                         {checklist_prompt}
                         Return ALL listed checklist items using this format:
 

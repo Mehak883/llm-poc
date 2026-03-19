@@ -6,8 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
 from intent_analysis import IntentAnalysis
 from Services.checklist_service import ChecklistService
+from Services.assist_service import AssistService
 from Models.base_response import APIResponse
 from Models.analyze_model import AnalyzeRequest
+from Models.assist_model import AssistRequest
+from Models.session_model import SessionEndRequest
 import json
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +21,7 @@ app = FastAPI()
 logger.info("Server for feedback analysis initialized")
 checklist_service = ChecklistService()
 intent_analysis_service = IntentAnalysis()
+assist_service = AssistService()
 
 # Allow .NET backend
 app.add_middleware(
@@ -87,3 +91,65 @@ async def generate_checklist(
                 message=str(e)
             ).model_dump(mode="json")
         )
+
+@app.post("/api/assist")
+async def assist(request: AssistRequest):
+
+    try:
+
+        conversation_id = request.conversationId
+        transcript = request.transcript
+        checklist = request.complianceChecklist
+       
+
+        result = assist_service.analyze(
+            conversation_id,
+            transcript,
+            checklist
+        )
+
+        return APIResponse(
+            status="success",
+            timestamp=datetime.now(timezone.utc),
+            data=result
+        ).model_dump(exclude_none=True)
+
+    except Exception as e:
+        logger.exception(f"Error processing assist request: {e}")
+        return JSONResponse(
+            status_code=500,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump()
+        )
+
+
+@app.post("/api/session/end")
+async def session_end(request: SessionEndRequest):
+
+    try:
+        conv_id = request.conversationId
+        if not conv_id:
+            return {"error": "conv_id missing"}
+        assist_service.end_session(conv_id)
+        return APIResponse(
+            status="success",
+            timestamp=datetime.now(timezone.utc),
+            data={"conversationId": conv_id}
+        ).model_dump(exclude_none=True)
+
+    except Exception as e:
+        logger.exception("Error processing session management.")
+
+        return JSONResponse(
+
+            status_code=500,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump()
+        )
+    

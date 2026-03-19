@@ -1,7 +1,6 @@
 import io
 import json
 import logging
-import logging
 from pydantic import BaseModel
 from pypdf import PdfReader
 from Services.openai_client import AzureOpenAIClient
@@ -76,7 +75,7 @@ class ChecklistService:
         chunks = self.split_text(text)
         checklist_items = []
         # Process limited chunks for safety
-        for chunk in chunks[:3]:
+        for chunk in chunks:
             items = self.generate_checklist_from_chunk(chunk)
             checklist_items.extend(items)
 
