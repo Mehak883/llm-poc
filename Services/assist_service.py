@@ -80,6 +80,7 @@ class AssistService:
                 return {
                     "checklist": self.session_manager.build_response(conv_id)
                 }
+            logger.info(f"The transcript is {transcript}")
             formatted_conversation = self.format_transcript(transcript)
             checklist_prompt = self.checklist_to_prompt(items_to_check)
             prompt = ASSIST_PROMPT.format(formatted_conversation=formatted_conversation, checklist_prompt=checklist_prompt)
