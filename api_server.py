@@ -107,6 +107,7 @@ async def assist(request: AssistRequest):
             transcript,
             checklist
         )
+        logger.info(f"The Assist Api returning {result}")
 
         return APIResponse(
             status="success",
