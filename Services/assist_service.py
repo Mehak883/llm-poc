@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 from Services.openai_client import AzureOpenAIClient
 from Services.session_manager import SessionManager
-from Prompts.prompts import ASSIST_PROMPT
+from Prompts.prompts import ASSIST_PROMPT, GLOBAL_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class AssistService:
                 return {
                     "checklist": self.session_manager.build_response(conv_id)
                 }
-            logger.debug(f"The transcript is {transcript}")
+            logger.info(f"the transcript is {transcript}")
             formatted_conversation = self.format_transcript(transcript)
             checklist_prompt = self.checklist_to_prompt(items_to_check)
             prompt = ASSIST_PROMPT.format(formatted_conversation=formatted_conversation, checklist_prompt=checklist_prompt)
@@ -89,7 +89,7 @@ class AssistService:
                 model="gpt-4o-mini",
                 response_format=AssistResponse,
                 messages=[
-                    {"role": "system", "content": "Return only formatted checklist."},
+                    {"role": "system", "content": GLOBAL_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
