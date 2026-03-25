@@ -4,7 +4,7 @@ import logging
 from pydantic import BaseModel
 from pypdf import PdfReader
 from Services.openai_client import AzureOpenAIClient
-from Prompts.prompts import CHECKLIST_PROMPT
+from Prompts.prompts import CHECKLIST_PROMPT, GLOBAL_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ class ChecklistService:
 
     def __init__(self):
         self.client = AzureOpenAIClient.get_client()
+        self.MIN_TEXT_LENGTH = 100
 
     def extract_text_from_pdf(self, pdf_bytes):
 
@@ -49,7 +50,7 @@ class ChecklistService:
         response = self.client.chat.completions.parse(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Return only valid JSON."},
+                {"role": "system", "content": GLOBAL_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             response_format=ChecklistResponse,
@@ -72,12 +73,23 @@ class ChecklistService:
         text = self.extract_text_from_pdf(pdf_bytes)
         if not text.strip():
             raise ValueError("No text extracted from PDF")
+        if len(text.strip()) < self.MIN_TEXT_LENGTH:
+            raise ValueError(
+                f"The uploaded PDF contains very little text ({len(text.strip())} characters). "
+            )
         chunks = self.split_text(text)
         checklist_items = []
         # Process limited chunks for safety
         for chunk in chunks:
             items = self.generate_checklist_from_chunk(chunk)
             checklist_items.extend(items)
+
+        # Irrelevant PDF check - LLM returned nothing useful
+        if not checklist_items:
+            logger.warning("No checklist items extracted — document may be irrelevant.")
+            raise ValueError(
+                "No checklist items found. Please upload a sales training or sales agent guidelines document."
+            )
 
         # fixed deduplication 
         seen = set()
@@ -89,7 +101,7 @@ class ChecklistService:
                 unique_items.append(item)
 
         # re-assign clean sequential IDs after dedup
-        final = unique_items[:10]
+        final = unique_items
         for index, item in enumerate(final):
             item.id = index + 1
 

@@ -80,7 +80,17 @@ async def generate_checklist(
             timestamp=datetime.now(timezone.utc),
             data={"checklist": checklist_labels}
         ).model_dump(exclude_none=True)
-    
+
+    except ValueError as e:
+        logger.warning(f"Invalid PDF upload: {e}")
+        return JSONResponse(
+            status_code=400,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump(mode="json")
+        )
     except Exception as e:
         logger.exception("Checklist generation failed")
         return JSONResponse(
@@ -107,7 +117,7 @@ async def assist(request: AssistRequest):
             transcript,
             checklist
         )
-
+        logger.info(f"The Assist Api returning {result}")
         return APIResponse(
             status="success",
             timestamp=datetime.now(timezone.utc),

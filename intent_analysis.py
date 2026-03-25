@@ -2,7 +2,7 @@ import json
 import logging
 from Services.openai_client import AzureOpenAIClient
 from Configs import config
-from Prompts.prompts import INTENT_PROMPT, CUSTOMER_SATISFACTION_PROMPT
+from Prompts.prompts import INTENT_PROMPT, CUSTOMER_SATISFACTION_PROMPT, GLOBAL_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class IntentAnalysis:
                     }
                 },
                 messages=[
-                    {"role": "system", "content": "Return only valid JSON."},
+                    {"role": "system", "content": GLOBAL_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0
@@ -214,7 +214,7 @@ class IntentAnalysis:
                     }
                 },
                 messages=[
-                    {"role": "system", "content": "Return ONLY valid JSON. No extra text."},
+                    {"role": "system", "content": GLOBAL_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ]
             )
