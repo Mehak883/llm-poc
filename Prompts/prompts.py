@@ -99,3 +99,26 @@ ASSIST_PROMPT="""You are a real-time sales coach.
 
                         1 done
                         2 pending"""
+
+RELEVANCE_CHECK_PROMPT="""
+    You are a strict document classifier.
+
+    Your task is to determine whether the following document is relevant for generating a compliance or sales checklist.
+
+    Relevant documents include:
+    - Sales guidelines
+    - Call handling scripts
+    - Customer interaction processes
+    - Compliance instructions
+    - Agent workflows
+
+    Irrelevant documents include:
+    - Random notes
+    - Stories, novels
+    - Technical logs without business context
+    - Personal or unrelated content
+
+    Respond ONLY with one word: YES or NO.
+
+    Document:
+    \"\"\"{sample_text}\"\"\""""

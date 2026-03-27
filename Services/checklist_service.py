@@ -3,8 +3,9 @@ import json
 import logging
 from pydantic import BaseModel
 from pypdf import PdfReader
+from Configs import config
 from Services.openai_client import AzureOpenAIClient
-from Prompts.prompts import CHECKLIST_PROMPT, GLOBAL_SYSTEM_PROMPT
+from Prompts.prompts import CHECKLIST_PROMPT, GLOBAL_SYSTEM_PROMPT, RELEVANCE_CHECK_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,8 @@ class ChecklistService:
 
     def __init__(self):
         self.client = AzureOpenAIClient.get_client()
-        self.MIN_TEXT_LENGTH = 100
+        self.MIN_TEXT_LENGTH = config.MIN_TEXT_LENGTH
+        self.MAX_PDF_SIZE = config.MAX_PDF_SIZE  # 1MB
 
     def extract_text_from_pdf(self, pdf_bytes):
 
@@ -111,3 +113,64 @@ class ChecklistService:
         # checklist_items = list(dict.fromkeys(checklist_items))
         # logger.info(f"Generated {len(checklist_items)} checklist items")
         return [item.model_dump() for item in final]
+    
+    def validate_pdf(self, pdf_bytes, filename: str):
+        
+        try:
+            #For empty files
+            if not pdf_bytes:
+                return {"is_valid": False, "reason": "File is empty"}
+
+            #For large files
+            if len(pdf_bytes) > self.MAX_PDF_SIZE:
+                return {"is_valid": False, "reason": "File size exceeds 1 MB limit"}
+
+            #For crashed files
+            text = self.extract_text_from_pdf(pdf_bytes)
+            if not text or not text.strip():
+                return {"is_valid": False, "reason": "No readable content (possibly scanned PDF)"}
+
+            #For short files
+            if len(text.strip()) < self.MIN_TEXT_LENGTH:
+                return {
+                    "is_valid": False,
+                    "reason": "Insufficient content (<100 characters)"
+                }
+            # LLM relevance check (by sending only 2000 characters)
+            is_relevant = self._is_relevant_document(text[:2000])
+
+            if not is_relevant:
+                return {
+                    "is_valid": False,
+                    "reason": "Content not relevant"
+                }
+
+            return {"is_valid": True,}
+
+        except Exception as e:
+            logger.exception(f"Error validating file {filename}")
+            return {"is_valid": False, "reason": "Corrupted or unreadable PDF"}
+        
+    def _is_relevant_document(self, text: str) -> bool:
+        try:
+            sample_text = text
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a strict classifier."},
+                    {"role": "user", "content": RELEVANCE_CHECK_PROMPT.format(sample_text=sample_text)}
+                ],
+                temperature=0
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                logger.warning("Empty response from relevance check, defaulting to relevant")
+                return True
+
+            answer = content.strip().upper()
+            return answer.startswith("YES") 
+
+        except Exception as e:
+            logger.exception("Relevance check failed, defaulting to relevant")
+            return True  

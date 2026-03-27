@@ -9,3 +9,5 @@ class ProdConfig(BaseConfig):
     AZURE_OPENAI_API_VERSION: str = Field(default="")
     DEBUG: bool = False
     LOG_LEVEL: str = "WARNING"
+    MAX_PDF_SIZE: int = Field(default=1 * 1024 * 1024)  
+    MIN_TEXT_LENGTH: int = Field(default=100)             
