@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
+from typing import Annotated
 from intent_analysis import IntentAnalysis
 from Services.checklist_service import ChecklistService
 from Services.assist_service import AssistService
@@ -82,7 +83,7 @@ async def generate_checklist(
         ).model_dump(exclude_none=True)
 
     except ValueError as e:
-        logger.warning(f"Invalid PDF upload: {e}")
+        logger.warning(f"Invalid PDF upload request: {str(e)}")
         return JSONResponse(
             status_code=400,
             content=APIResponse(
@@ -163,3 +164,43 @@ async def session_end(request: SessionEndRequest):
             ).model_dump()
         )
     
+@app.post("/api/checklist/validate")
+async def validate_pdf(file: Annotated[UploadFile, File(...)]):
+    try:
+        if not file:
+            logger.warning("No file provided in validate request")
+            raise ValueError("PDF file must be uploaded")
+
+        file_bytes = await file.read()
+        filename = file.filename or ""
+        result = checklist_service.validate_pdf(file_bytes, filename)
+        logger.info(f"Validation result for {filename}: {result['is_valid']}")
+
+        return APIResponse(
+            status="success",
+            timestamp=datetime.now(timezone.utc),
+            data=result
+        ).model_dump(exclude_none=True)
+
+    except ValueError as e:
+        logger.warning(f"Validation error: {e}")
+        return JSONResponse(
+            status_code=400,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump(mode="json")
+        )
+
+    except Exception as e:
+        logger.exception("Validation API failed")
+        return JSONResponse(
+            status_code=500,
+            content=APIResponse(
+                status="error",
+                timestamp=datetime.now(timezone.utc),
+                message=str(e)
+            ).model_dump(mode="json")
+        )
+
