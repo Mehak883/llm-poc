@@ -8,5 +8,5 @@ class DevConfig(BaseConfig):
     AZURE_OPENAI_ENDPOINT:str =""
     AZURE_OPENAI_DEPLOYMENT_NAME:str ="gpt-4o-mini"
     AZURE_OPENAI_API_VERSION:str ="2025-01-01-preview"
-    MAX_PDF_SIZE: int = Field(default=1 * 100 * 1024)  #1MB
+    MAX_PDF_SIZE: int = Field(default=1 * 1024 * 1024)  #1MB
     MIN_TEXT_LENGTH: int = Field(default=100)  

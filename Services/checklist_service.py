@@ -148,7 +148,7 @@ class ChecklistService:
             return {"is_valid": True,}
 
         except Exception as e:
-            logger.exception(f"Error validating file {filename}")
+            logger.exception(f"Error validating file '{str(filename)}': {str(e)}")
             return {"is_valid": False, "reason": "Corrupted or unreadable PDF"}
         
     def _is_relevant_document(self, text: str) -> bool:
@@ -172,5 +172,5 @@ class ChecklistService:
             return answer.startswith("YES") 
 
         except Exception as e:
-            logger.exception("Relevance check failed, defaulting to relevant")
+            logger.exception(f"Relevance check failed: {str(e)}, defaulting to relevant")
             return True  

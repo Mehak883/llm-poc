@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
+from typing import Annotated
 from intent_analysis import IntentAnalysis
 from Services.checklist_service import ChecklistService
 from Services.assist_service import AssistService
@@ -82,7 +83,7 @@ async def generate_checklist(
         ).model_dump(exclude_none=True)
 
     except ValueError as e:
-        logger.warning(f"Invalid PDF upload: {e}")
+        logger.warning(f"Invalid PDF upload request: {str(e)}")
         return JSONResponse(
             status_code=400,
             content=APIResponse(
@@ -164,7 +165,7 @@ async def session_end(request: SessionEndRequest):
         )
     
 @app.post("/api/checklist/validate")
-async def validate_pdf(file: UploadFile = File(...)):
+async def validate_pdf(file: Annotated[UploadFile, File(...)]):
     try:
         if not file:
             logger.warning("No file provided in validate request")
